@@ -1,7 +1,7 @@
 'use client';
 
 import { CollectorDaySummary, QualityState } from '@/lib/api-client';
-import { ShieldCheck, ShieldAlert, ShieldX, Database, ArrowRight } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, ShieldX, Database, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import clsx from 'clsx';
 import { motion } from 'framer-motion';
 
@@ -28,13 +28,70 @@ function QualityBadge({ quality }: { quality: QualityState }) {
     );
 }
 
-export function DailyTrustSummary({ data }: { data: CollectorDaySummary | null }) {
+interface DailyTrustSummaryProps {
+    data: CollectorDaySummary | null;
+    selectedDate: string;
+    onDateChange: (date: string) => void;
+    isToday: boolean;
+}
+
+export function DailyTrustSummary({ data, selectedDate, onDateChange, isToday }: DailyTrustSummaryProps) {
+    const handlePrevDay = () => {
+        const d = new Date(selectedDate.substring(0, 4) + '-' + selectedDate.substring(4, 6) + '-' + selectedDate.substring(6, 8));
+        d.setUTCDate(d.getUTCDate() - 1);
+        const year = d.getUTCFullYear();
+        const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(d.getUTCDate()).padStart(2, '0');
+        onDateChange(`${year}${month}${day}`);
+    };
+
+    const handleNextDay = () => {
+        if (isToday) return;
+        const d = new Date(selectedDate.substring(0, 4) + '-' + selectedDate.substring(4, 6) + '-' + selectedDate.substring(6, 8));
+        d.setUTCDate(d.getUTCDate() + 1);
+        const year = d.getUTCFullYear();
+        const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(d.getUTCDate()).padStart(2, '0');
+        onDateChange(`${year}${month}${day}`);
+    };
+
     if (!data) {
         return (
-            <div className="p-6 rounded-2xl border border-white/5 bg-white/[0.02] backdrop-blur-sm flex items-center justify-center h-48">
-                <div className="flex flex-col items-center gap-2 opacity-40">
-                    <ShieldX className="w-8 h-8" />
-                    <span className="font-mono text-sm uppercase">No Daily Summary Data</span>
+            <div className="p-6 rounded-2xl border border-white/5 bg-white/[0.02] backdrop-blur-sm">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                    <div>
+                        <h2 className="text-lg font-medium flex items-center gap-2">
+                            <ShieldCheck className="w-5 h-5 text-indigo-400" />
+                            Daily Trust Summary
+                        </h2>
+                        <div className="flex items-center gap-3 mt-2">
+                            <button
+                                onClick={handlePrevDay}
+                                className="p-1 hover:bg-white/10 rounded transition-colors text-slate-400 hover:text-white"
+                            >
+                                <ChevronLeft className="w-5 h-5" />
+                            </button>
+                            <div className="text-xs text-slate-400 uppercase tracking-wider font-mono">
+                                {selectedDate.substring(0, 4)}-{selectedDate.substring(4, 6)}-{selectedDate.substring(6, 8)} (UTC)
+                            </div>
+                            <button
+                                onClick={handleNextDay}
+                                disabled={isToday}
+                                className={clsx(
+                                    "p-1 rounded transition-colors",
+                                    isToday ? "opacity-20 cursor-not-allowed" : "hover:bg-white/10 text-slate-400 hover:text-white"
+                                )}
+                            >
+                                <ChevronRight className="w-5 h-5" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div className="h-48 border border-dashed border-white/5 rounded-xl flex items-center justify-center">
+                    <div className="flex flex-col items-center gap-2 opacity-40">
+                        <ShieldX className="w-8 h-8" />
+                        <span className="font-mono text-sm uppercase text-center">No Summary Data for this date<br /><span className="text-[10px] opacity-60">(Try another day)</span></span>
+                    </div>
                 </div>
             </div>
         );
@@ -48,8 +105,26 @@ export function DailyTrustSummary({ data }: { data: CollectorDaySummary | null }
                         <ShieldCheck className="w-5 h-5 text-indigo-400" />
                         Daily Trust Summary
                     </h2>
-                    <div className="text-xs text-slate-400 mt-1 uppercase tracking-wider font-mono">
-                        {data.date} (UTC)
+                    <div className="flex items-center gap-3 mt-2">
+                        <button
+                            onClick={handlePrevDay}
+                            className="p-1 hover:bg-white/10 rounded transition-colors text-slate-400 hover:text-white"
+                        >
+                            <ChevronLeft className="w-5 h-5" />
+                        </button>
+                        <div className="text-xs text-slate-400 uppercase tracking-wider font-mono">
+                            {data.date} (UTC)
+                        </div>
+                        <button
+                            onClick={handleNextDay}
+                            disabled={isToday}
+                            className={clsx(
+                                "p-1 rounded transition-colors",
+                                isToday ? "opacity-20 cursor-not-allowed" : "hover:bg-white/10 text-slate-400 hover:text-white"
+                            )}
+                        >
+                            <ChevronRight className="w-5 h-5" />
+                        </button>
                     </div>
                 </div>
 

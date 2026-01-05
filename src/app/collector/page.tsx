@@ -26,6 +26,15 @@ export default function CollectorPage() {
     const [windowsData, setWindowsData] = useState<CollectorWindow[] | null>(null);
     const [uploaderData, setUploaderData] = useState<CollectorUploaderNow | null>(null);
 
+    // Date Navigation State
+    const [selectedDate, setSelectedDate] = useState(() => {
+        const d = new Date();
+        const year = d.getUTCFullYear();
+        const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(d.getUTCDate()).padStart(2, '0');
+        return `${year}${month}${day}`;
+    });
+
 
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
     const [loading, setLoading] = useState(true);
@@ -40,61 +49,65 @@ export default function CollectorPage() {
         return `${year}${month}${day}`;
     };
 
-    const loadData = async () => {
+    const loadLiveData = async () => {
         const controller = new AbortController();
         try {
-            console.log('FETCHING: START');
-            const todayIndex = getUtcTodayString();
-
-            // 1. Raw Proof Fetch (Mandatory Step 1)
+            console.log('FETCHING LIVE: START');
             const nowRaw = await fetchCollectorNow(controller.signal);
-            console.log('STATUS: 200 (Now)');
-            console.log('RAW RESPONSE:', JSON.stringify(nowRaw));
+            const uploaderRaw = await fetchCollectorUploaderNow(controller.signal).catch(() => null);
 
             setNowData(nowRaw);
-
-            // 2. Fetch Day Data (Soft Fail)
-            // We fetch these independently so if one fails (e.g. 404 for new day), the other (or at least Live Status) still works.
-            const summaryPromise = fetchCollectorDaySummary(todayIndex, controller.signal)
-                .catch(e => {
-                    console.warn('Summary fetch failed (non-critical):', e.message);
-                    return null;
-                });
-
-            const windowsPromise = fetchCollectorDayWindows(todayIndex, controller.signal)
-                .catch(e => {
-                    console.warn('Windows fetch failed (non-critical):', e.message);
-                    return null;
-                });
-
-            const uploaderPromise = fetchCollectorUploaderNow(controller.signal)
-                .catch(e => {
-                    console.warn('Uploader fetch failed (non-critical):', e.message);
-                    return null;
-                });
-
-            const [summary, windows, uploader] = await Promise.all([summaryPromise, windowsPromise, uploaderPromise]);
-
-            setSummaryData(summary);
-            setWindowsData(windows);
-            setUploaderData(uploader);
-            setError(null);
+            setUploaderData(uploaderRaw);
             setLastUpdated(new Date());
+            setError(null);
         } catch (err: any) {
-            console.error('FETCH ERROR:', err);
+            console.error('LIVE FETCH ERROR:', err);
             setError(err.message || 'Connection Failed');
-
-            if (!nowData) { /* error logic handled by error state */ }
-        } finally {
-            setLoading(false);
         }
     };
 
+    const loadDayData = async (targetDate: string) => {
+        const controller = new AbortController();
+        try {
+            console.log('FETCHING DAY DATA:', targetDate);
+            const summaryPromise = fetchCollectorDaySummary(targetDate, controller.signal)
+                .catch(e => {
+                    console.warn('Summary fetch failed:', e.message);
+                    return null;
+                });
+
+            const windowsPromise = fetchCollectorDayWindows(targetDate, controller.signal)
+                .catch(e => {
+                    console.warn('Windows fetch failed:', e.message);
+                    return null;
+                });
+
+            const [summary, windows] = await Promise.all([summaryPromise, windowsPromise]);
+
+            setSummaryData(summary);
+            setWindowsData(windows);
+        } catch (err: any) {
+            console.error('DAY DATA FETCH ERROR:', err);
+        }
+    };
+
+    // 1. Live Data Polling (Always)
     useEffect(() => {
-        loadData();
-        const interval = setInterval(loadData, 3000); // 3s polling
+        loadLiveData();
+        const interval = setInterval(loadLiveData, 3000);
         return () => clearInterval(interval);
     }, []);
+
+    // 2. Day Data Fetching (When date changes or every 15s if it's today)
+    useEffect(() => {
+        loadDayData(selectedDate);
+        setLoading(false);
+
+        if (selectedDate === getUtcTodayString()) {
+            const interval = setInterval(() => loadDayData(selectedDate), 15000);
+            return () => clearInterval(interval);
+        }
+    }, [selectedDate]);
 
     if (error && !nowData) {
         return (
@@ -106,7 +119,7 @@ export default function CollectorPage() {
                         <CloudOff className="w-16 h-16 mb-4" />
                         <h1 className="text-2xl font-bold">SYSTEM OFFLINE</h1>
                         <p className="opacity-60 mb-8">Collector API Unreachable</p>
-                        <button onClick={() => { setLoading(true); loadData(); }} className="flex items-center gap-2 px-4 py-2 bg-red-900/30 rounded border border-red-500/30 hover:bg-red-900/50">
+                        <button onClick={() => { setLoading(true); loadLiveData(); loadDayData(selectedDate); }} className="flex items-center gap-2 px-4 py-2 bg-red-900/30 rounded border border-red-500/30 hover:bg-red-900/50">
                             <RefreshCw className="w-4 h-4" /> Retry
                         </button>
                     </div>
@@ -130,7 +143,12 @@ export default function CollectorPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* 3. Daily Trust Summary */}
                     <div className="lg:col-span-2">
-                        <DailyTrustSummary data={summaryData} />
+                        <DailyTrustSummary
+                            data={summaryData}
+                            selectedDate={selectedDate}
+                            onDateChange={setSelectedDate}
+                            isToday={selectedDate === getUtcTodayString()}
+                        />
                     </div>
 
                     {/* 4. Right Column: Recommended Usage + Uploader Status */}
